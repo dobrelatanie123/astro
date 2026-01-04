@@ -61,10 +61,51 @@ const getScoreLabel = (score: number | null) => {
   return "Strongly Refuted";
 };
 
+// Generate fallback explanation when DB explanation is missing
+const getAnalysisText = (claim: any) => {
+  if (claim.verification_explanation && 
+      !claim.verification_explanation.toLowerCase().includes('no relevant academic papers')) {
+    return claim.verification_explanation;
+  }
+  
+  // Generate based on score and paper data
+  const score = claim.verification_score;
+  const paperTitle = claim.paper_title;
+  const author = claim.author_normalized || claim.author_mentioned;
+  
+  if (score === null && !paperTitle) {
+    return null; // No data to generate from
+  }
+  
+  if (paperTitle && score !== null) {
+    if (score >= 70) {
+      return `The claim is strongly supported by the paper "${paperTitle}". The key findings in the study align closely with what was stated in the video${author ? ` regarding ${author}'s research` : ''}.`;
+    } else if (score >= 30) {
+      return `The claim is partially supported by "${paperTitle}". While the paper addresses the topic, some specific details may differ from the claim.`;
+    } else if (score > -30) {
+      return `The evidence from "${paperTitle}" is inconclusive regarding this claim. The paper touches on related topics but doesn't directly confirm or refute the specific claim.`;
+    } else if (score > -70) {
+      return `The claim is partially contradicted by "${paperTitle}". Some findings in the paper differ from what was stated.`;
+    } else {
+      return `The claim is strongly contradicted by "${paperTitle}". The paper's findings conflict with the claim made in the video.`;
+    }
+  }
+  
+  return null;
+};
+
+const analysisText = claim ? getAnalysisText(claim) : null;
+
 const formatTimestamp = (ts: string) => ts || "0:00";
 
-const youtubeUrl = claim?.video_id 
-  ? `https://www.youtube.com/watch?v=${claim.video_id.replace('yt-', '')}&t=${parseTimestamp(claim.timestamp)}s`
+const videoId = claim?.video_id?.replace('yt-', '') || null;
+
+const youtubeUrl = videoId 
+  ? `https://www.youtube.com/watch?v=${videoId}&t=${parseTimestamp(claim?.timestamp)}s`
+  : null;
+
+const thumbnailUrl = videoId
+  ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
   : null;
 
 function parseTimestamp(ts: string): number {
@@ -100,51 +141,59 @@ const scoreColors = getScoreColor(score);
       ) : (
         <div class="space-y-8">
           
-          <!-- Verification Score Gauge -->
-          <div class="bg-slate-900/50 rounded-2xl p-8 border border-slate-800">
-            <div class="text-center mb-6">
-              <div class="text-sm uppercase tracking-wider text-slate-500 mb-2">Verification Score</div>
-              <div class={`text-4xl font-bold ${scoreColors.text}`}>
-                {score !== null ? (score > 0 ? `+${score}` : score) : "—"}
-              </div>
-              <div class={`text-lg font-medium ${scoreColors.text} opacity-80`}>
-                {getScoreLabel(score)}
-              </div>
-            </div>
+          {/* ═══════════════════════════════════════════════════════════ */}
+          {/* MAIN CLAIM CARD - Claim + Score + Analysis + Source Video   */}
+          {/* ═══════════════════════════════════════════════════════════ */}
+          <div class="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden">
             
-            <!-- Horizontal Gauge -->
-            <div class="relative h-8 rounded-full overflow-hidden bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500">
-              <!-- Score indicator -->
-              {score !== null && (
-                <div 
-                  class="absolute top-0 bottom-0 w-1 bg-white shadow-lg shadow-white/50 transition-all duration-500"
-                  style={`left: ${gaugePosition}%`}
-                >
-                  <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-8 border-l-transparent border-r-transparent border-t-white"></div>
-                </div>
-              )}
+            {/* The Claim - Hero Section */}
+            <div class="p-8 border-b border-slate-800">
+              <div class="flex flex-wrap gap-3 mb-4">
+                {claim.author_normalized && (
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 text-sm">
+                    👤 Study Author: {claim.author_normalized}
+                  </span>
+                )}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/50 text-slate-400 text-sm">
+                  ⏱️ {formatTimestamp(claim.timestamp)}
+                </span>
+              </div>
               
-              <!-- Scale markers -->
-              <div class="absolute inset-0 flex justify-between items-center px-2 text-xs font-bold text-white/80">
-                <span>-100</span>
-                <span>-50</span>
-                <span>0</span>
-                <span>+50</span>
-                <span>+100</span>
+              <h1 class="text-2xl font-semibold text-slate-100 leading-relaxed">
+                "{claim.finding_summary}"
+              </h1>
+            </div>
+            
+            {/* Verification Score - Stacked Layout */}
+            <div class="p-6 bg-slate-800/30 border-b border-slate-800 space-y-4 text-center">
+              {/* Score + Label */}
+              <div class="flex items-baseline justify-center gap-3">
+                <div class={`text-4xl font-bold ${scoreColors.text}`}>
+                  {score !== null ? (score > 0 ? `+${score}` : score) : "—"}
+                </div>
+                <div class={`text-lg font-medium ${scoreColors.text}`}>{getScoreLabel(score)}</div>
               </div>
-            </div>
-            
-            <!-- Scale labels -->
-            <div class="flex justify-between mt-2 text-xs text-slate-500">
-              <span>Refuted</span>
-              <span>Inconclusive</span>
-              <span>Verified</span>
-            </div>
-            
-            <!-- Transparency Notice -->
-            <div class="mt-6 p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-              <div class="flex items-start gap-3">
-                <span class="text-lg">
+              
+              {/* Gauge */}
+              <div class="max-w-lg mx-auto">
+                <div class="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500">
+                  {score !== null && (
+                    <div 
+                      class="absolute top-0 bottom-0 w-1 bg-white shadow-lg shadow-white/50"
+                      style={`left: ${gaugePosition}%`}
+                    />
+                  )}
+                </div>
+                <div class="flex justify-between mt-1.5 text-xs text-slate-500">
+                  <span>Refuted</span>
+                  <span>Inconclusive</span>
+                  <span>Verified</span>
+                </div>
+              </div>
+              
+              {/* Verification Source - Descriptive */}
+              <div class="flex items-start gap-3 p-3 rounded-lg bg-slate-700/30 border border-slate-700/50 text-left max-w-lg mx-auto">
+                <span class="text-xl">
                   {claim.verified_from === 'full_text' ? '📄' : claim.verified_from === 'abstract' ? '📝' : '❓'}
                 </span>
                 <div>
@@ -155,7 +204,7 @@ const scoreColors = getScoreColor(score);
                       ? 'Verified against abstract only'
                       : 'Verification source unknown'}
                   </div>
-                  <div class="text-sm text-slate-500 mt-1">
+                  <div class="text-sm text-slate-500 mt-0.5">
                     {claim.verified_from === 'full_text' 
                       ? 'We accessed the complete paper text for thorough verification.'
                       : claim.verified_from === 'abstract'
@@ -163,7 +212,7 @@ const scoreColors = getScoreColor(score);
                       : 'Could not determine verification source.'}
                   </div>
                   {claim.is_open_access && (
-                    <div class="flex items-center gap-1 mt-2 text-sm text-emerald-400">
+                    <div class="flex items-center gap-1 mt-1.5 text-sm text-emerald-400">
                       <span>🔓</span>
                       <span>Open Access Paper</span>
                     </div>
@@ -171,55 +220,69 @@ const scoreColors = getScoreColor(score);
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Claim Details -->
-          <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
-            <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">The Claim</h2>
-            <p class="text-xl text-slate-200 leading-relaxed">
-              {claim.finding_summary}
-            </p>
             
-            <div class="flex flex-wrap gap-4 mt-6">
-              {claim.author_normalized && (
-                <div class="flex items-center gap-2 text-slate-400">
-                  <span class="text-lg">👤</span>
-                  <span>{claim.author_normalized}</span>
+            {/* Verification Analysis */}
+            {analysisText && (
+              <div class="p-6 border-b border-slate-800">
+                <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Analysis</h2>
+                <p class="text-slate-300 leading-relaxed">
+                  {analysisText}
+                </p>
+              </div>
+            )}
+            
+            {/* Original Statement + Video */}
+            <div class="p-6">
+              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Original Statement</h2>
+              <blockquote class="text-slate-400 italic border-l-4 border-violet-500/50 pl-4 mb-6">
+                "{claim.segment_text}"
+              </blockquote>
+              
+              {/* Video Thumbnail */}
+              {youtubeUrl && thumbnailUrl && (
+                <div class="w-1/2">
+                  <a 
+                    href={youtubeUrl} 
+                    target="_blank" 
+                    rel="noopener"
+                    class="block relative group rounded-xl overflow-hidden border border-slate-700 hover:border-violet-500/50 transition-all"
+                  >
+                    <img 
+                      src={thumbnailUrl} 
+                      alt="Video thumbnail"
+                      class="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
+                      onerror="this.src='https://img.youtube.com/vi/' + this.src.split('/')[4] + '/hqdefault.jpg'"
+                    />
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                      <div class="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-xs font-medium text-white">
+                      @ {formatTimestamp(claim.timestamp)}
+                    </div>
+                  </a>
+                  <a href={youtubeUrl} target="_blank" rel="noopener" 
+                     class="inline-flex items-center gap-2 mt-3 text-violet-400 hover:text-violet-300 transition-colors text-sm">
+                    <span>▶️</span>
+                    <span>Watch on YouTube</span>
+                  </a>
                 </div>
               )}
-              <div class="flex items-center gap-2 text-slate-400">
-                <span class="text-lg">⏱️</span>
-                <span>@ {formatTimestamp(claim.timestamp)}</span>
-              </div>
+              
+              {youtubeUrl && !thumbnailUrl && (
+                <a href={youtubeUrl} target="_blank" rel="noopener" 
+                   class="inline-flex items-center gap-2 text-violet-400 hover:text-violet-300 transition-colors">
+                  <span>▶️</span>
+                  <span>Watch on YouTube</span>
+                </a>
+              )}
             </div>
           </div>
 
-          <!-- Verification Explanation -->
-          {claim.verification_explanation && (
-            <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
-              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Verification Analysis</h2>
-              <p class="text-slate-300 leading-relaxed">
-                {claim.verification_explanation}
-              </p>
-            </div>
-          )}
-
-          <!-- Original Quote -->
-          <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
-            <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Original Statement</h2>
-            <blockquote class="text-slate-300 italic border-l-4 border-violet-500/50 pl-4">
-              "{claim.segment_text}"
-            </blockquote>
-            {youtubeUrl && (
-              <a href={youtubeUrl} target="_blank" rel="noopener" 
-                 class="inline-flex items-center gap-2 mt-4 text-violet-400 hover:text-violet-300 transition-colors">
-                <span>▶️</span>
-                <span>Watch on YouTube</span>
-              </a>
-            )}
-          </div>
-
-          <!-- Paper Evidence -->
+          <!-- Source Paper -->
           {claim.paper_title && (
             <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
               <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Source Paper</h2>
