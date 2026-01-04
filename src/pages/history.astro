@@ -1,0 +1,198 @@
+---
+import Layout from "../layouts/Layout.astro";
+import type { Claim } from "../db/database.types";
+
+const { supabase, user } = Astro.locals;
+
+// Redirect to login if not authenticated
+if (!user) {
+  return Astro.redirect('/login?redirect=/history');
+}
+
+// Get user's view history with claim details
+const { data: viewHistory, error } = await supabase
+  .from("user_claim_views")
+  .select(`
+    claim_id,
+    first_seen_at,
+    last_seen_at,
+    seen_count
+  `)
+  .eq("user_id", user.id)
+  .order("last_seen_at", { ascending: false })
+  .limit(50);
+
+// Fetch claim details for each view
+let claimsWithHistory: Array<{
+  view: typeof viewHistory[0];
+  claim: Claim | null;
+}> = [];
+
+if (viewHistory && viewHistory.length > 0) {
+  const claimIds = viewHistory.map(v => v.claim_id);
+  const { data: claims } = await supabase
+    .from("claims")
+    .select("*")
+    .in("claim_id", claimIds);
+  
+  claimsWithHistory = viewHistory.map(view => ({
+    view,
+    claim: claims?.find(c => c.claim_id === view.claim_id) || null
+  }));
+}
+
+// Score-based styling
+const getScoreColor = (score: number | null) => {
+  if (score === null) return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+  if (score >= 70) return "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+  if (score >= 30) return "bg-lime-500/20 text-lime-300 border-lime-500/30";
+  if (score > -30) return "bg-amber-500/20 text-amber-300 border-amber-500/30";
+  if (score > -70) return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  return "bg-red-500/20 text-red-300 border-red-500/30";
+};
+
+const getScoreLabel = (score: number | null, verdict: string | null) => {
+  if (verdict === 'no_paper_found') return "No Paper";
+  if (score === null) return "Pending";
+  if (score >= 70) return "Verified";
+  if (score >= 30) return "Partial";
+  if (score > -30) return "Inconclusive";
+  if (score > -70) return "Contradicted";
+  return "Refuted";
+};
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getRelativeTime = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return formatDate(dateStr);
+};
+---
+
+<Layout title="My History | Lumos">
+  <div class="min-h-screen bg-slate-950 text-slate-100 py-12 px-4">
+    <div class="max-w-6xl mx-auto">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-3xl font-bold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+            My History
+          </h1>
+          <p class="text-slate-400 mt-1">Claims you've viewed</p>
+        </div>
+        
+        <div class="flex items-center gap-4">
+          <a href="/claims" class="text-slate-400 hover:text-white transition-colors">
+            All Claims
+          </a>
+          <span class="text-slate-600">|</span>
+          <span class="text-slate-400">{user.email}</span>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div class="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+          <div class="text-3xl font-bold text-white">{claimsWithHistory.length}</div>
+          <div class="text-slate-400 text-sm">Claims Viewed</div>
+        </div>
+        <div class="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+          <div class="text-3xl font-bold text-emerald-400">
+            {claimsWithHistory.filter(h => h.claim && (h.claim.verification_score ?? 0) >= 70).length}
+          </div>
+          <div class="text-slate-400 text-sm">Verified Claims</div>
+        </div>
+        <div class="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+          <div class="text-3xl font-bold text-violet-400">
+            {claimsWithHistory.reduce((sum, h) => sum + (h.view.seen_count || 1), 0)}
+          </div>
+          <div class="text-slate-400 text-sm">Total Views</div>
+        </div>
+      </div>
+
+      <!-- History List -->
+      {claimsWithHistory.length === 0 ? (
+        <div class="text-center py-20 bg-slate-900/30 rounded-2xl border border-slate-800">
+          <div class="text-6xl mb-4">📭</div>
+          <h2 class="text-xl font-semibold text-slate-300 mb-2">No history yet</h2>
+          <p class="text-slate-500 mb-6">
+            Start viewing claims to build your history
+          </p>
+          <a href="/claims" class="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors">
+            Browse Claims
+          </a>
+        </div>
+      ) : (
+        <div class="space-y-3">
+          {claimsWithHistory.map(({ view, claim }) => claim && (
+            <a 
+              href={`/claim/${claim.claim_id}`}
+              class="block bg-slate-900/50 hover:bg-slate-900/80 rounded-xl p-5 border border-slate-800 hover:border-slate-700 transition-all group"
+            >
+              <div class="flex items-start gap-4">
+                <!-- Score Badge -->
+                <div class={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium border ${getScoreColor(claim.verification_score)}`}>
+                  {claim.verification_score !== null ? (
+                    <span>{claim.verification_score > 0 ? '+' : ''}{claim.verification_score}</span>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </div>
+                
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    {claim.author_normalized && (
+                      <span class="text-violet-400 text-sm font-medium">
+                        {claim.author_normalized}
+                      </span>
+                    )}
+                    <span class={`text-xs px-2 py-0.5 rounded ${getScoreColor(claim.verification_score)}`}>
+                      {getScoreLabel(claim.verification_score, claim.verification_verdict)}
+                    </span>
+                  </div>
+                  
+                  <p class="text-slate-200 line-clamp-2 group-hover:text-white transition-colors">
+                    {claim.finding_summary}
+                  </p>
+                  
+                  <div class="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                    <span>Last viewed: {getRelativeTime(view.last_seen_at)}</span>
+                    {view.seen_count > 1 && (
+                      <span>Viewed {view.seen_count} times</span>
+                    )}
+                  </div>
+                </div>
+                
+                <!-- Arrow -->
+                <div class="text-slate-600 group-hover:text-violet-400 transition-colors">
+                  →
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</Layout>
+

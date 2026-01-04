@@ -1,0 +1,58 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Authenticating... | Lumos">
+  <div class="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div class="text-center">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
+        <span class="text-3xl">🔍</span>
+      </div>
+      <p class="text-slate-400">Authenticating...</p>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+  
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL || 'https://zehilcqtaedymmwlndpm.supabase.co',
+    import.meta.env.PUBLIC_SUPABASE_KEY || 'sb_publishable_L2HgCiCIPHjz3mKZ4-ABGQ_PtJiuzUz'
+  );
+
+  // Handle the OAuth callback
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
+  
+  if (accessToken && refreshToken) {
+    // Set the session
+    supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }).then(({ error }) => {
+      if (error) {
+        window.location.href = `/login?error=${encodeURIComponent(error.message)}`;
+      } else {
+        window.location.href = '/claims';
+      }
+    });
+  } else {
+    // No tokens in hash, check for error
+    const error = hashParams.get('error_description') || hashParams.get('error');
+    if (error) {
+      window.location.href = `/login?error=${encodeURIComponent(error)}`;
+    } else {
+      // Try to get session from URL (for email confirmation)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          window.location.href = '/claims';
+        } else {
+          window.location.href = '/login';
+        }
+      });
+    }
+  }
+</script>
+

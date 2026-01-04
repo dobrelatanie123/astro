@@ -1,0 +1,298 @@
+---
+import Layout from "../layouts/Layout.astro";
+import type { Claim } from "../db/database.types";
+
+const { supabase, user } = Astro.locals;
+
+// Get filter from URL
+const verdictFilter = Astro.url.searchParams.get('verdict');
+const sourceFilter = Astro.url.searchParams.get('source');
+
+// Build query
+let query = supabase
+  .from("claims")
+  .select("*")
+  .order("created_at", { ascending: false })
+  .limit(50);
+
+if (verdictFilter && verdictFilter !== 'all') {
+  query = query.eq('verification_verdict', verdictFilter);
+}
+
+if (sourceFilter && sourceFilter !== 'all') {
+  query = query.eq('verified_from', sourceFilter);
+}
+
+const { data: claims, error } = await query;
+
+// Get stats
+const { count: totalCount } = await supabase.from("claims").select("*", { count: "exact", head: true });
+const { count: verifiedCount } = await supabase.from("claims").select("*", { count: "exact", head: true }).gte('verification_score', 70);
+const { count: fullTextCount } = await supabase.from("claims").select("*", { count: "exact", head: true }).eq('verified_from', 'full_text');
+
+// Score-based styling
+const getScoreColor = (score: number | null) => {
+  if (score === null) return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+  if (score >= 70) return "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+  if (score >= 30) return "bg-lime-500/20 text-lime-300 border-lime-500/30";
+  if (score > -30) return "bg-amber-500/20 text-amber-300 border-amber-500/30";
+  if (score > -70) return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  return "bg-red-500/20 text-red-300 border-red-500/30";
+};
+
+const getScoreLabel = (score: number | null, verdict: string | null) => {
+  if (verdict === 'no_paper_found') return "No Paper";
+  if (score === null) return "Pending";
+  if (score >= 70) return "Verified";
+  if (score >= 30) return "Partial";
+  if (score > -30) return "Inconclusive";
+  if (score > -70) return "Contradicted";
+  return "Refuted";
+};
+
+const getSourceIcon = (source: string | null) => {
+  if (source === 'full_text') return "📄";
+  if (source === 'abstract') return "📝";
+  return "";
+};
+
+const getGaugePosition = (score: number | null) => {
+  if (score === null) return 50;
+  return ((score + 100) / 200) * 100;
+};
+---
+
+<Layout title="Claims Dashboard | Lumos">
+  <div class="min-h-screen bg-slate-950 text-slate-100">
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
+      <div class="max-w-7xl mx-auto px-6 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <a href="/" class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+              <span class="text-xl">🔍</span>
+            </a>
+            <div>
+              <h1 class="text-xl font-bold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                Lumos Claims
+              </h1>
+              <p class="text-sm text-slate-500">Scientific claim verification</p>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-4">
+            {user ? (
+              <div class="flex items-center gap-4">
+                <a href="/history" class="text-sm text-violet-400 hover:text-violet-300 transition-colors">
+                  My History
+                </a>
+                <span class="text-slate-600">|</span>
+                <span class="text-sm text-slate-400">{user.email}</span>
+                <a href="/auth/logout" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                  Logout
+                </a>
+              </div>
+            ) : (
+              <a href="/login" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm transition-colors">
+                Sign In
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="border-b border-slate-800 bg-slate-900/30">
+      <div class="max-w-7xl mx-auto px-6 py-4">
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-bold text-slate-100">{totalCount || 0}</span>
+            <span class="text-sm text-slate-500">Total Claims</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-bold text-emerald-400">{verifiedCount || 0}</span>
+            <span class="text-sm text-slate-500">Verified</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-bold text-violet-400">{fullTextCount || 0}</span>
+            <span class="text-sm text-slate-500">Full-Text</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="border-b border-slate-800">
+      <div class="max-w-7xl mx-auto px-6 py-3">
+        <div class="flex items-center gap-6">
+          <span class="text-sm text-slate-500">Filter:</span>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-600">Verdict:</span>
+            <select 
+              id="verdict-filter"
+              class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm focus:outline-none focus:border-violet-500"
+            >
+              <option value="all" selected={!verdictFilter || verdictFilter === 'all'}>All</option>
+              <option value="verified" selected={verdictFilter === 'verified'}>Verified</option>
+              <option value="partially_supported" selected={verdictFilter === 'partially_supported'}>Partial</option>
+              <option value="inconclusive" selected={verdictFilter === 'inconclusive'}>Inconclusive</option>
+              <option value="no_paper_found" selected={verdictFilter === 'no_paper_found'}>No Paper</option>
+            </select>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-600">Source:</span>
+            <select 
+              id="source-filter"
+              class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm focus:outline-none focus:border-violet-500"
+            >
+              <option value="all" selected={!sourceFilter || sourceFilter === 'all'}>All</option>
+              <option value="full_text" selected={sourceFilter === 'full_text'}>Full Text</option>
+              <option value="abstract" selected={sourceFilter === 'abstract'}>Abstract Only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+      {error && (
+        <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6">
+          <p class="text-red-400">Error loading claims: {error.message}</p>
+        </div>
+      )}
+
+      {claims && claims.length === 0 && (
+        <div class="text-center py-20">
+          <div class="text-6xl mb-4">📭</div>
+          <h2 class="text-xl font-semibold text-slate-300 mb-2">No claims found</h2>
+          <p class="text-slate-500">Try adjusting your filters or process a YouTube video</p>
+        </div>
+      )}
+
+      <!-- Claims Grid -->
+      <div class="grid gap-4">
+        {claims?.map((claim: Claim) => (
+          <a href={`/claim/${claim.claim_id}`} class="block">
+            <article class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 hover:border-violet-500/50 hover:bg-slate-900/70 transition-all cursor-pointer">
+              <div class="flex items-start justify-between gap-4 mb-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-2 flex-wrap">
+                    <!-- Score Badge -->
+                    <span class={`px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(claim.verification_score)}`}>
+                      {claim.verification_score !== null && claim.verification_score !== undefined 
+                        ? (claim.verification_score > 0 ? `+${claim.verification_score}` : claim.verification_score)
+                        : getScoreLabel(claim.verification_score, claim.verification_verdict)}
+                    </span>
+                    
+                    <!-- Source indicator -->
+                    {claim.verified_from && (
+                      <span class="text-xs text-slate-500" title={claim.verified_from === 'full_text' ? 'Verified against full paper' : 'Verified against abstract only'}>
+                        {getSourceIcon(claim.verified_from)}
+                      </span>
+                    )}
+                    
+                    <span class="text-xs text-slate-600">•</span>
+                    <span class="text-xs text-slate-500">{claim.timestamp}</span>
+                  </div>
+                  
+                  <h3 class="text-lg font-medium text-slate-100 leading-snug">
+                    {claim.finding_summary}
+                  </h3>
+                </div>
+                
+                <!-- Mini Score Gauge -->
+                {claim.verification_score !== null && claim.verification_score !== undefined && (
+                  <div class="flex-shrink-0 w-20">
+                    <div class="h-2 rounded-full bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500 relative overflow-hidden">
+                      <div 
+                        class="absolute top-0 bottom-0 w-0.5 bg-white"
+                        style={`left: ${getGaugePosition(claim.verification_score)}%`}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {claim.author_mentioned && (
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-slate-500 text-sm">Author:</span>
+                  <span class="text-violet-400 text-sm font-medium">{claim.author_normalized || claim.author_mentioned}</span>
+                </div>
+              )}
+
+              <blockquote class="text-sm text-slate-400 border-l-2 border-slate-700 pl-4 mb-4 italic">
+                "{claim.segment_text.length > 200 ? claim.segment_text.slice(0, 200) + "..." : claim.segment_text}"
+              </blockquote>
+
+              {claim.paper_title && (
+                <div class="bg-slate-800/50 rounded-xl p-4 mb-4">
+                  <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                      <span class="text-sm">📄</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-medium text-slate-200 line-clamp-2">
+                        {claim.paper_title}
+                      </div>
+                      <p class="text-xs text-slate-500 mt-1">
+                        {claim.paper_authors} • {claim.paper_year}
+                        {claim.is_open_access && <span class="ml-2 text-emerald-400">🔓 Open Access</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {claim.verification_explanation && (
+                <div class="text-sm text-slate-400 bg-slate-800/30 rounded-lg p-3">
+                  <span class="text-slate-500 font-medium">Analysis: </span>
+                  {claim.verification_explanation.length > 200 
+                    ? claim.verification_explanation.slice(0, 200) + "..." 
+                    : claim.verification_explanation}
+                </div>
+              )}
+
+              <div class="flex items-center justify-between mt-4 pt-4 border-t border-slate-800">
+                <span class="text-xs text-slate-600">
+                  {new Date(claim.created_at).toLocaleDateString()}
+                </span>
+                <span class="text-xs text-violet-400">
+                  View details →
+                </span>
+              </div>
+            </article>
+          </a>
+        ))}
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<script>
+  // Filter handlers
+  document.getElementById('verdict-filter')?.addEventListener('change', (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    const url = new URL(window.location.href);
+    if (value === 'all') {
+      url.searchParams.delete('verdict');
+    } else {
+      url.searchParams.set('verdict', value);
+    }
+    window.location.href = url.toString();
+  });
+
+  document.getElementById('source-filter')?.addEventListener('change', (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    const url = new URL(window.location.href);
+    if (value === 'all') {
+      url.searchParams.delete('source');
+    } else {
+      url.searchParams.set('source', value);
+    }
+    window.location.href = url.toString();
+  });
+</script>

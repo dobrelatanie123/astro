@@ -1,0 +1,274 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import type { Claim } from "../../db/database.types";
+
+const { supabase, user } = Astro.locals;
+const { claimId } = Astro.params;
+
+const { data: claim, error } = await supabase
+  .from("claims")
+  .select("*")
+  .eq("claim_id", claimId)
+  .single();
+
+// Track view for logged-in users
+if (user && claim) {
+  // Check if view exists
+  const { data: existingView } = await supabase
+    .from("user_claim_views")
+    .select("id, seen_count")
+    .eq("user_id", user.id)
+    .eq("claim_id", claimId)
+    .single();
+  
+  if (existingView) {
+    // Update existing view
+    await supabase
+      .from("user_claim_views")
+      .update({
+        last_seen_at: new Date().toISOString(),
+        seen_count: (existingView.seen_count || 1) + 1
+      })
+      .eq("id", existingView.id);
+  } else {
+    // Insert new view
+    await supabase
+      .from("user_claim_views")
+      .insert({
+        user_id: user.id,
+        claim_id: claimId,
+        source: 'dashboard'
+      });
+  }
+}
+
+// Score-based color gradient
+const getScoreColor = (score: number | null) => {
+  if (score === null) return { bg: "from-slate-600 to-slate-700", text: "text-slate-300" };
+  if (score >= 70) return { bg: "from-emerald-500 to-green-600", text: "text-emerald-100" };
+  if (score >= 30) return { bg: "from-lime-500 to-emerald-500", text: "text-lime-100" };
+  if (score > -30) return { bg: "from-amber-500 to-yellow-500", text: "text-amber-100" };
+  if (score > -70) return { bg: "from-orange-500 to-red-500", text: "text-orange-100" };
+  return { bg: "from-red-600 to-rose-700", text: "text-red-100" };
+};
+
+const getScoreLabel = (score: number | null) => {
+  if (score === null) return "No Score";
+  if (score >= 70) return "Strongly Verified";
+  if (score >= 30) return "Partially Supported";
+  if (score > -30) return "Inconclusive";
+  if (score > -70) return "Partially Contradicted";
+  return "Strongly Refuted";
+};
+
+const formatTimestamp = (ts: string) => ts || "0:00";
+
+const youtubeUrl = claim?.video_id 
+  ? `https://www.youtube.com/watch?v=${claim.video_id.replace('yt-', '')}&t=${parseTimestamp(claim.timestamp)}s`
+  : null;
+
+function parseTimestamp(ts: string): number {
+  if (!ts) return 0;
+  const parts = ts.split(':').map(Number);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return 0;
+}
+
+// Calculate gauge position (0-100%)
+const score = claim?.verification_score ?? null;
+const gaugePosition = score !== null ? ((score + 100) / 200) * 100 : 50;
+const scoreColors = getScoreColor(score);
+---
+
+<Layout title={claim ? `Claim: ${claim.finding_summary?.slice(0, 50)}...` : "Claim Not Found"}>
+  <div class="min-h-screen bg-slate-950 text-slate-100 py-12 px-4">
+    <div class="max-w-4xl mx-auto">
+      
+      <!-- Back button -->
+      <a href="/claims" class="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors">
+        <span>←</span>
+        <span>Back to Claims</span>
+      </a>
+
+      {!claim ? (
+        <div class="text-center py-20">
+          <div class="text-6xl mb-4">🔍</div>
+          <h1 class="text-2xl font-bold text-slate-300 mb-2">Claim Not Found</h1>
+          <p class="text-slate-500">The claim you're looking for doesn't exist.</p>
+        </div>
+      ) : (
+        <div class="space-y-8">
+          
+          <!-- Verification Score Gauge -->
+          <div class="bg-slate-900/50 rounded-2xl p-8 border border-slate-800">
+            <div class="text-center mb-6">
+              <div class="text-sm uppercase tracking-wider text-slate-500 mb-2">Verification Score</div>
+              <div class={`text-4xl font-bold ${scoreColors.text}`}>
+                {score !== null ? (score > 0 ? `+${score}` : score) : "—"}
+              </div>
+              <div class={`text-lg font-medium ${scoreColors.text} opacity-80`}>
+                {getScoreLabel(score)}
+              </div>
+            </div>
+            
+            <!-- Horizontal Gauge -->
+            <div class="relative h-8 rounded-full overflow-hidden bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500">
+              <!-- Score indicator -->
+              {score !== null && (
+                <div 
+                  class="absolute top-0 bottom-0 w-1 bg-white shadow-lg shadow-white/50 transition-all duration-500"
+                  style={`left: ${gaugePosition}%`}
+                >
+                  <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-8 border-l-transparent border-r-transparent border-t-white"></div>
+                </div>
+              )}
+              
+              <!-- Scale markers -->
+              <div class="absolute inset-0 flex justify-between items-center px-2 text-xs font-bold text-white/80">
+                <span>-100</span>
+                <span>-50</span>
+                <span>0</span>
+                <span>+50</span>
+                <span>+100</span>
+              </div>
+            </div>
+            
+            <!-- Scale labels -->
+            <div class="flex justify-between mt-2 text-xs text-slate-500">
+              <span>Refuted</span>
+              <span>Inconclusive</span>
+              <span>Verified</span>
+            </div>
+            
+            <!-- Transparency Notice -->
+            <div class="mt-6 p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div class="flex items-start gap-3">
+                <span class="text-lg">
+                  {claim.verified_from === 'full_text' ? '📄' : claim.verified_from === 'abstract' ? '📝' : '❓'}
+                </span>
+                <div>
+                  <div class="font-medium text-slate-300">
+                    {claim.verified_from === 'full_text' 
+                      ? 'Verified against full paper' 
+                      : claim.verified_from === 'abstract'
+                      ? 'Verified against abstract only'
+                      : 'Verification source unknown'}
+                  </div>
+                  <div class="text-sm text-slate-500 mt-1">
+                    {claim.verified_from === 'full_text' 
+                      ? 'We accessed the complete paper text for thorough verification.'
+                      : claim.verified_from === 'abstract'
+                      ? 'Only the abstract was available. Score capped at ±50 due to limited information.'
+                      : 'Could not determine verification source.'}
+                  </div>
+                  {claim.is_open_access && (
+                    <div class="flex items-center gap-1 mt-2 text-sm text-emerald-400">
+                      <span>🔓</span>
+                      <span>Open Access Paper</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Claim Details -->
+          <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+            <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">The Claim</h2>
+            <p class="text-xl text-slate-200 leading-relaxed">
+              {claim.finding_summary}
+            </p>
+            
+            <div class="flex flex-wrap gap-4 mt-6">
+              {claim.author_normalized && (
+                <div class="flex items-center gap-2 text-slate-400">
+                  <span class="text-lg">👤</span>
+                  <span>{claim.author_normalized}</span>
+                </div>
+              )}
+              <div class="flex items-center gap-2 text-slate-400">
+                <span class="text-lg">⏱️</span>
+                <span>@ {formatTimestamp(claim.timestamp)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verification Explanation -->
+          {claim.verification_explanation && (
+            <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Verification Analysis</h2>
+              <p class="text-slate-300 leading-relaxed">
+                {claim.verification_explanation}
+              </p>
+            </div>
+          )}
+
+          <!-- Original Quote -->
+          <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+            <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Original Statement</h2>
+            <blockquote class="text-slate-300 italic border-l-4 border-violet-500/50 pl-4">
+              "{claim.segment_text}"
+            </blockquote>
+            {youtubeUrl && (
+              <a href={youtubeUrl} target="_blank" rel="noopener" 
+                 class="inline-flex items-center gap-2 mt-4 text-violet-400 hover:text-violet-300 transition-colors">
+                <span>▶️</span>
+                <span>Watch on YouTube</span>
+              </a>
+            )}
+          </div>
+
+          <!-- Paper Evidence -->
+          {claim.paper_title && (
+            <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Source Paper</h2>
+              <div class="space-y-3">
+                <h3 class="text-lg font-semibold text-slate-200">{claim.paper_title}</h3>
+                {claim.paper_authors && (
+                  <p class="text-slate-400">{claim.paper_authors}</p>
+                )}
+                {claim.paper_year && (
+                  <p class="text-slate-500">Published: {claim.paper_year}</p>
+                )}
+                {claim.paper_abstract && (
+                  <details class="mt-4">
+                    <summary class="text-slate-400 cursor-pointer hover:text-slate-300">
+                      View Abstract
+                    </summary>
+                    <p class="text-slate-400 text-sm mt-3 leading-relaxed pl-4 border-l-2 border-slate-700">
+                      {claim.paper_abstract}
+                    </p>
+                  </details>
+                )}
+                {claim.paper_url && (
+                  <a href={claim.paper_url} target="_blank" rel="noopener"
+                     class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors">
+                    <span>📄</span>
+                    <span>View Paper</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          <!-- No Paper Found -->
+          {!claim.paper_title && claim.verification_verdict === 'no_paper_found' && (
+            <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+              <div class="flex items-center gap-3 text-slate-400">
+                <span class="text-2xl">📭</span>
+                <div>
+                  <div class="font-medium">No matching paper found</div>
+                  <div class="text-sm text-slate-500">
+                    We couldn't find an academic paper that directly addresses this claim.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  </div>
+</Layout>

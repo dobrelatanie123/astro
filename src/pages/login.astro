@@ -1,0 +1,170 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const { user } = Astro.locals;
+
+// Redirect if already logged in
+if (user) {
+  return Astro.redirect('/claims');
+}
+
+const errorMessage = Astro.url.searchParams.get('error');
+const message = Astro.url.searchParams.get('message');
+---
+
+<Layout title="Login | Lumos">
+  <div class="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/25">
+          <span class="text-3xl">🔍</span>
+        </div>
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+          Lumos
+        </h1>
+        <p class="text-slate-500 mt-2">Sign in to track your verified claims</p>
+      </div>
+
+      <!-- Messages -->
+      {errorMessage && (
+        <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          {errorMessage}
+        </div>
+      )}
+      
+      {message && (
+        <div class="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm">
+          {message}
+        </div>
+      )}
+
+      <!-- Login Form -->
+      <div class="bg-slate-900/50 rounded-2xl p-8 border border-slate-800">
+        <form id="login-form" class="space-y-6">
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-slate-300 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              minlength="6"
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium transition-all shadow-lg shadow-violet-500/25"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-slate-500 text-sm">
+            Don't have an account? 
+            <a href="/signup" class="text-violet-400 hover:text-violet-300 transition-colors">
+              Sign up
+            </a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Magic Link Option -->
+      <div class="mt-6">
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-slate-800"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-4 bg-slate-950 text-slate-500">or</span>
+          </div>
+        </div>
+
+        <form id="magic-link-form" class="mt-6">
+          <div class="flex gap-2">
+            <input
+              type="email"
+              id="magic-email"
+              name="email"
+              required
+              class="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors text-sm"
+              placeholder="Email for magic link"
+            />
+            <button
+              type="submit"
+              class="px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors text-sm whitespace-nowrap"
+            >
+              Send Link
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+  
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL || 'https://zehilcqtaedymmwlndpm.supabase.co',
+    import.meta.env.PUBLIC_SUPABASE_KEY || 'sb_publishable_L2HgCiCIPHjz3mKZ4-ABGQ_PtJiuzUz'
+  );
+
+  // Regular login
+  document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const email = (form.querySelector('#email') as HTMLInputElement).value;
+    const password = (form.querySelector('#password') as HTMLInputElement).value;
+    
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (error) {
+      window.location.href = `/login?error=${encodeURIComponent(error.message)}`;
+    } else {
+      window.location.href = '/claims';
+    }
+  });
+
+  // Magic link
+  document.getElementById('magic-link-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const email = (form.querySelector('#magic-email') as HTMLInputElement).value;
+    
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    
+    if (error) {
+      window.location.href = `/login?error=${encodeURIComponent(error.message)}`;
+    } else {
+      window.location.href = `/login?message=${encodeURIComponent('Check your email for the magic link!')}`;
+    }
+  });
+</script>
+

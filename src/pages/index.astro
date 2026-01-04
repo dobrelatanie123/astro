@@ -1,8 +1,118 @@
 ---
-import Welcome from "../components/Welcome.astro";
 import Layout from "../layouts/Layout.astro";
+
+const { supabase, user } = Astro.locals;
+
+const { count } = await supabase
+  .from("claims")
+  .select("*", { count: "exact", head: true });
+
+const { count: verifiedCount } = await supabase
+  .from("claims")
+  .select("*", { count: "exact", head: true })
+  .gte('verification_score', 70);
 ---
 
-<Layout>
-  <Welcome />
+<Layout title="Lumos | Scientific Claim Verification">
+  <div class="min-h-screen bg-slate-950 text-slate-100">
+    <!-- Nav -->
+    <nav class="absolute top-0 left-0 right-0 z-10">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+            <span class="text-sm">🔍</span>
+          </div>
+          <span class="font-bold text-slate-100">Lumos</span>
+        </div>
+        
+        <div class="flex items-center gap-4">
+          {user ? (
+            <>
+              <a href="/claims" class="text-sm text-slate-400 hover:text-slate-200 transition-colors">
+                Dashboard
+              </a>
+              <a href="/auth/logout" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                Logout
+              </a>
+            </>
+          ) : (
+            <>
+              <a href="/login" class="text-sm text-slate-400 hover:text-slate-200 transition-colors">
+                Sign In
+              </a>
+              <a href="/signup" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm transition-colors">
+                Get Started
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero -->
+    <div class="flex flex-col items-center justify-center min-h-screen px-6 text-center">
+      <!-- Logo -->
+      <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mb-8 shadow-2xl shadow-violet-500/30">
+        <span class="text-5xl">🔍</span>
+      </div>
+      
+      <h1 class="text-6xl font-bold mb-6 bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
+        Lumos
+      </h1>
+      
+      <p class="text-xl text-slate-400 mb-8 max-w-lg">
+        Verify scientific claims in podcasts with AI-powered fact-checking against real academic papers.
+      </p>
+
+      <!-- Stats -->
+      <div class="flex items-center gap-8 mb-12">
+        <div class="text-center">
+          <div class="text-4xl font-bold text-slate-100">{count || 0}</div>
+          <div class="text-sm text-slate-500">Claims Analyzed</div>
+        </div>
+        <div class="w-px h-12 bg-slate-800"></div>
+        <div class="text-center">
+          <div class="text-4xl font-bold text-emerald-400">{verifiedCount || 0}</div>
+          <div class="text-sm text-slate-500">Verified</div>
+        </div>
+      </div>
+      
+      <!-- CTA -->
+      <div class="flex items-center gap-4">
+        <a 
+          href="/claims" 
+          class="px-8 py-4 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium transition-all shadow-lg shadow-violet-500/25"
+        >
+          View Claims Dashboard
+        </a>
+        {!user && (
+          <a 
+            href="/signup" 
+            class="px-8 py-4 rounded-xl border border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-900/50 transition-all"
+          >
+            Create Account
+          </a>
+        )}
+      </div>
+
+      <!-- Features -->
+      <div class="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl">
+        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <div class="text-3xl mb-4">🎧</div>
+          <h3 class="font-semibold text-slate-200 mb-2">Real-time Extraction</h3>
+          <p class="text-sm text-slate-500">Claims are extracted as you watch YouTube videos with our browser extension.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <div class="text-3xl mb-4">📄</div>
+          <h3 class="font-semibold text-slate-200 mb-2">Full Paper Access</h3>
+          <p class="text-sm text-slate-500">We fetch and analyze complete academic papers, not just abstracts.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <div class="text-3xl mb-4">📊</div>
+          <h3 class="font-semibold text-slate-200 mb-2">Transparent Scoring</h3>
+          <p class="text-sm text-slate-500">See exactly how claims were verified with our -100 to +100 scoring system.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </Layout>

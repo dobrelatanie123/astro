@@ -1,0 +1,12 @@
+import type { APIRoute } from 'astro';
+
+export const GET: APIRoute = async ({ locals, redirect, cookies }) => {
+  await locals.supabase.auth.signOut();
+  
+  // Clear auth cookies
+  cookies.delete('sb-access-token', { path: '/' });
+  cookies.delete('sb-refresh-token', { path: '/' });
+  
+  return redirect('/login');
+};
+
