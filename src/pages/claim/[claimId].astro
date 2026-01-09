@@ -289,7 +289,9 @@ const scoreColors = getScoreColor(score);
               <div class="space-y-3">
                 <h3 class="text-lg font-semibold text-slate-200">{claim.paper_title}</h3>
                 {claim.author_normalized && (
-                  <p class="text-slate-400">Study Author: {claim.author_normalized}</p>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 text-sm">
+                    👤 Study Author: {claim.author_normalized}
+                  </span>
                 )}
                 {claim.paper_authors && (
                   <p class="text-slate-400">{claim.paper_authors}</p>
