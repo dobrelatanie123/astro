@@ -154,13 +154,8 @@ const scoreColors = getScoreColor(score);
             {/* The Claim - Hero Section */}
             <div class="p-8 border-b border-slate-800">
               <div class="flex flex-wrap gap-3 mb-4">
-                {claim.author_normalized && (
-                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 text-sm">
-                    👤 Study Author: {claim.author_normalized}
-                  </span>
-                )}
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/50 text-slate-400 text-sm">
-                  ⏱️ {formatTimestamp(claim.timestamp)}
+                  🎬 Claim from ⏱️ {formatTimestamp(claim.timestamp)}
                 </span>
               </div>
               
@@ -293,6 +288,9 @@ const scoreColors = getScoreColor(score);
               <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-3">Source Paper</h2>
               <div class="space-y-3">
                 <h3 class="text-lg font-semibold text-slate-200">{claim.paper_title}</h3>
+                {claim.author_normalized && (
+                  <p class="text-violet-400">Study Author: {claim.author_normalized}</p>
+                )}
                 {claim.paper_authors && (
                   <p class="text-slate-400">{claim.paper_authors}</p>
                 )}
