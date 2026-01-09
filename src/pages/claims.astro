@@ -4,6 +4,11 @@ import type { Claim } from "../db/database.types";
 
 const { supabase, user } = Astro.locals;
 
+// Require authentication
+if (!user) {
+  return Astro.redirect('/login?redirect=/claims');
+}
+
 // Get filter from URL
 const verdictFilter = Astro.url.searchParams.get('verdict');
 const sourceFilter = Astro.url.searchParams.get('source');
@@ -83,6 +88,10 @@ const getGaugePosition = (score: number | null) => {
           <div class="flex items-center gap-4">
             {user ? (
               <div class="flex items-center gap-4">
+                <a href="/get-extension" class="text-sm text-violet-400 hover:text-violet-300 transition-colors">
+                  Get Extension
+                </a>
+                <span class="text-slate-600">|</span>
                 <a href="/history" class="text-sm text-violet-400 hover:text-violet-300 transition-colors">
                   My History
                 </a>

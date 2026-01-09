@@ -110,7 +110,7 @@ const errorMessage = Astro.url.searchParams.get('error');
   
   const supabase = createClient(
     import.meta.env.PUBLIC_SUPABASE_URL || 'https://zehilcqtaedymmwlndpm.supabase.co',
-    import.meta.env.PUBLIC_SUPABASE_KEY || 'sb_publishable_L2HgCiCIPHjz3mKZ4-ABGQ_PtJiuzUz'
+    import.meta.env.PUBLIC_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplaGlsY3F0YWVkeW1td2xuZHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjUzNTIsImV4cCI6MjA4MjcwMTM1Mn0.kH6I-z0TLTaRtmJvPNftO3GUE6WUBhBm5X4M6H-9ynQ'
   );
 
   document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
@@ -125,7 +125,7 @@ const errorMessage = Astro.url.searchParams.get('error');
       return;
     }
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -135,7 +135,14 @@ const errorMessage = Astro.url.searchParams.get('error');
     
     if (error) {
       window.location.href = `/signup?error=${encodeURIComponent(error.message)}`;
+    } else if (data.session) {
+      // Email confirmation disabled - user is logged in immediately
+      const maxAge = 60 * 60 * 24 * 7; // 7 days
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      window.location.href = '/get-extension';
     } else {
+      // Email confirmation required
       window.location.href = `/login?message=${encodeURIComponent('Check your email to confirm your account!')}`;
     }
   });

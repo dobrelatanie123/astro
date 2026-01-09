@@ -1,5 +1,28 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+
+const { supabase } = Astro.locals;
+
+// Get redirect destination
+const redirectTo = Astro.url.searchParams.get('redirect') || '/get-extension';
+
+// Check if we have a code in the URL (PKCE flow)
+const code = Astro.url.searchParams.get('code');
+
+if (code) {
+  // Exchange code for session (this sets cookies automatically)
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  
+  if (error) {
+    return Astro.redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+  
+  // Successfully authenticated, redirect
+  return Astro.redirect(redirectTo);
+}
+
+// Check for hash-based tokens (magic link / OAuth implicit flow)
+// These need to be handled client-side
 ---
 
 <Layout title="Authenticating... | Lumos">
@@ -18,25 +41,34 @@ import Layout from "../../layouts/Layout.astro";
   
   const supabase = createClient(
     import.meta.env.PUBLIC_SUPABASE_URL || 'https://zehilcqtaedymmwlndpm.supabase.co',
-    import.meta.env.PUBLIC_SUPABASE_KEY || 'sb_publishable_L2HgCiCIPHjz3mKZ4-ABGQ_PtJiuzUz'
+    import.meta.env.PUBLIC_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplaGlsY3F0YWVkeW1td2xuZHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjUzNTIsImV4cCI6MjA4MjcwMTM1Mn0.kH6I-z0TLTaRtmJvPNftO3GUE6WUBhBm5X4M6H-9ynQ'
   );
-
-  // Handle the OAuth callback
+  
+  const redirectTo = '/get-extension';
+  
+  // Handle hash-based tokens (magic link puts tokens in hash)
   const hashParams = new URLSearchParams(window.location.hash.substring(1));
   const accessToken = hashParams.get('access_token');
   const refreshToken = hashParams.get('refresh_token');
   
   if (accessToken && refreshToken) {
-    // Set the session
+    // Use Supabase client to set the session properly
     supabase.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken,
-    }).then(({ error }) => {
+    }).then(({ data, error }) => {
       if (error) {
         window.location.href = `/login?error=${encodeURIComponent(error.message)}`;
-      } else {
-        window.location.href = '/claims';
+        return;
       }
+      
+      // Set cookies manually for SSR to read
+      const maxAge = 60 * 60 * 24 * 7; // 7 days
+      document.cookie = `sb-access-token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      document.cookie = `sb-refresh-token=${refreshToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      
+      // Redirect to destination
+      window.location.href = redirectTo;
     });
   } else {
     // No tokens in hash, check for error
@@ -44,10 +76,13 @@ import Layout from "../../layouts/Layout.astro";
     if (error) {
       window.location.href = `/login?error=${encodeURIComponent(error)}`;
     } else {
-      // Try to get session from URL (for email confirmation)
+      // Check if already have session
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          window.location.href = '/claims';
+          // Set cookies and redirect
+          document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60*60*24*7}; SameSite=Lax`;
+          document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; max-age=${60*60*24*7}; SameSite=Lax`;
+          window.location.href = redirectTo;
         } else {
           window.location.href = '/login';
         }
@@ -55,4 +90,3 @@ import Layout from "../../layouts/Layout.astro";
     }
   }
 </script>
-

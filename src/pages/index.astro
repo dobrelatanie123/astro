@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 
 const { supabase, user } = Astro.locals;
 
+// Stats
 const { count } = await supabase
   .from("claims")
   .select("*", { count: "exact", head: true });
@@ -11,13 +12,57 @@ const { count: verifiedCount } = await supabase
   .from("claims")
   .select("*", { count: "exact", head: true })
   .gte('verification_score', 70);
+
+// Top 3 claims with highest verification scores (for showcase)
+const { data: topClaims } = await supabase
+  .from("claims")
+  .select("claim_id, finding_summary, author_normalized, verification_score, verified_from, paper_title, timestamp, video_id, video_title")
+  .not('verification_score', 'is', null)
+  .order('verification_score', { ascending: false })
+  .limit(3);
+
+// Helper to get YouTube URL from video_id
+const getYouTubeUrl = (videoId: string | null, timestamp?: string) => {
+  if (!videoId) return null;
+  const id = videoId.replace('yt-', '');
+  let url = `https://youtube.com/watch?v=${id}`;
+  if (timestamp) {
+    const parts = timestamp.split(':').map(Number);
+    const seconds = parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + parts[2];
+    url += `&t=${seconds}`;
+  }
+  return url;
+};
+
+// Additional claims for blurred preview (next 3)
+const { data: previewClaims } = await supabase
+  .from("claims")
+  .select("claim_id, finding_summary, verification_score")
+  .not('verification_score', 'is', null)
+  .order('verification_score', { ascending: false })
+  .range(3, 5);
+
+// Helpers
+const getScoreColor = (score: number) => {
+  if (score >= 70) return "text-emerald-400";
+  if (score >= 30) return "text-lime-400";
+  if (score > -30) return "text-amber-400";
+  return "text-red-400";
+};
+
+const getScoreBg = (score: number) => {
+  if (score >= 70) return "bg-emerald-500/20 border-emerald-500/30";
+  if (score >= 30) return "bg-lime-500/20 border-lime-500/30";
+  if (score > -30) return "bg-amber-500/20 border-amber-500/30";
+  return "bg-red-500/20 border-red-500/30";
+};
 ---
 
 <Layout title="Lumos | Scientific Claim Verification">
   <div class="min-h-screen bg-slate-950 text-slate-100">
     <!-- Nav -->
-    <nav class="absolute top-0 left-0 right-0 z-10">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <nav class="border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-50">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
             <span class="text-sm">🔍</span>
@@ -49,70 +94,204 @@ const { count: verifiedCount } = await supabase
       </div>
     </nav>
 
-    <!-- Hero -->
-    <div class="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-      <!-- Logo -->
-      <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mb-8 shadow-2xl shadow-violet-500/30">
-        <span class="text-5xl">🔍</span>
-      </div>
-      
-      <h1 class="text-6xl font-bold mb-6 bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
-        Lumos
-      </h1>
-      
-      <p class="text-xl text-slate-400 mb-8 max-w-lg">
-        Verify scientific claims in podcasts with AI-powered fact-checking against real academic papers.
-      </p>
+    <!-- Hero - Compact -->
+    <section class="py-16 px-6 text-center border-b border-slate-800/50">
+      <div class="max-w-3xl mx-auto">
+        <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
+          Verify Scientific Claims in Real-Time. In the background. With 0 clicks.
+        </h1>
+        
+        <p class="text-lg text-slate-400 mb-8">
+          AI-powered fact-checking against peer-reviewed papers while you watch YouTube.<br/>
+          <span class="text-slate-500">Built to fight misinformation, one claim at a time.</span>
+        </p>
 
-      <!-- Stats -->
-      <div class="flex items-center gap-8 mb-12">
-        <div class="text-center">
-          <div class="text-4xl font-bold text-slate-100">{count || 0}</div>
-          <div class="text-sm text-slate-500">Claims Analyzed</div>
+        <!-- Stats inline -->
+        <div class="flex items-center justify-center gap-6 mb-8">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-bold text-slate-100">{count || 0}</span>
+            <span class="text-sm text-slate-500">claims analyzed</span>
+          </div>
+          <span class="text-slate-700">•</span>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-bold text-emerald-400">{verifiedCount || 0}</span>
+            <span class="text-sm text-slate-500">verified</span>
+          </div>
         </div>
-        <div class="w-px h-12 bg-slate-800"></div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-emerald-400">{verifiedCount || 0}</div>
-          <div class="text-sm text-slate-500">Verified</div>
-        </div>
-      </div>
-      
-      <!-- CTA -->
-      <div class="flex items-center gap-4">
-        <a 
-          href="/claims" 
-          class="px-8 py-4 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium transition-all shadow-lg shadow-violet-500/25"
-        >
-          View Claims Dashboard
-        </a>
-        {!user && (
+        
+        <!-- CTA -->
+        {user ? (
+          <a 
+            href="/get-extension" 
+            class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium transition-all shadow-lg shadow-violet-500/25"
+          >
+            <span>🧩</span>
+            <span>Get Browser Extension</span>
+          </a>
+        ) : (
           <a 
             href="/signup" 
-            class="px-8 py-4 rounded-xl border border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-900/50 transition-all"
+            class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium transition-all shadow-lg shadow-violet-500/25"
           >
-            Create Account
+            Get Started Free
           </a>
         )}
       </div>
+    </section>
 
-      <!-- Features -->
-      <div class="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl">
-        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-          <div class="text-3xl mb-4">🎧</div>
-          <h3 class="font-semibold text-slate-200 mb-2">Real-time Extraction</h3>
-          <p class="text-sm text-slate-500">Claims are extracted as you watch YouTube videos with our browser extension.</p>
-        </div>
-        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-          <div class="text-3xl mb-4">📄</div>
-          <h3 class="font-semibold text-slate-200 mb-2">Full Paper Access</h3>
-          <p class="text-sm text-slate-500">We fetch and analyze complete academic papers, not just abstracts.</p>
-        </div>
-        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-          <div class="text-3xl mb-4">📊</div>
-          <h3 class="font-semibold text-slate-200 mb-2">Transparent Scoring</h3>
-          <p class="text-sm text-slate-500">See exactly how claims were verified with our -100 to +100 scoring system.</p>
+    <!-- How It Works -->
+    <section class="py-12 px-6 border-b border-slate-800/50 bg-slate-900/20">
+      <div class="max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+          <div>
+            <div class="text-2xl mb-2">🎧</div>
+            <h3 class="font-medium text-slate-200 mb-1">Watch & Extract</h3>
+            <p class="text-sm text-slate-500">Claims extracted automatically as you watch</p>
+          </div>
+          <div>
+            <div class="text-2xl mb-2">📄</div>
+            <h3 class="font-medium text-slate-200 mb-1">Find Papers</h3>
+            <p class="text-sm text-slate-500">We search academic databases for source papers</p>
+          </div>
+          <div>
+            <div class="text-2xl mb-2">✓</div>
+            <h3 class="font-medium text-slate-200 mb-1">Verify</h3>
+            <p class="text-sm text-slate-500">AI compares claims against full paper text</p>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- Claims Showcase -->
+    <section class="py-16 px-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-10">
+          <h2 class="text-2xl font-bold text-slate-100 mb-2">Recently Verified Claims</h2>
+          <p class="text-slate-500">Real claims from YouTube videos</p>
+        </div>
+
+        <!-- Top 3 Claims - Full Detail -->
+        <div class="space-y-4 mb-6">
+          {topClaims?.map((claim) => (
+            <article class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-all">
+              <div class="flex items-start gap-4">
+                <!-- Score -->
+                <div class={`shrink-0 w-16 h-16 rounded-xl flex flex-col items-center justify-center border ${getScoreBg(claim.verification_score)}`}>
+                  <span class={`text-xl font-bold ${getScoreColor(claim.verification_score)}`}>
+                    {claim.verification_score > 0 ? '+' : ''}{claim.verification_score}
+                  </span>
+                  <span class="text-[10px] text-slate-500 uppercase">score</span>
+                </div>
+                
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-slate-200 font-medium mb-3 leading-snug">
+                    {claim.finding_summary}
+                  </p>
+                  
+                  <div class="space-y-1.5">
+                    {/* Video source - primary context */}
+                    {claim.video_id && (
+                      <a 
+                        href={getYouTubeUrl(claim.video_id, claim.timestamp)} 
+                        target="_blank" 
+                        rel="noopener"
+                        class="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        <span>▶</span>
+                        <span>{claim.video_title ? `${claim.video_title} @ ${claim.timestamp}` : `Watch claim @ ${claim.timestamp}`}</span>
+                      </a>
+                    )}
+                    
+                    {/* Paper reference - secondary */}
+                    {claim.paper_title && (
+                      <div class="flex items-center gap-2 text-xs text-slate-500">
+                        <span>📄</span>
+                        <span class="truncate max-w-sm" title={claim.paper_title}>
+                          Verified via: {claim.paper_title.slice(0, 40)}...
+                        </span>
+                        {claim.verified_from === 'full_text' && (
+                          <span class="text-emerald-500/60">✓</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <!-- Blurred Preview Claims -->
+        {previewClaims && previewClaims.length > 0 && (
+          <div class="relative">
+            <div class="space-y-4 blur-sm opacity-60 pointer-events-none select-none">
+              {previewClaims.map((claim) => (
+                <article class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                  <div class="flex items-start gap-4">
+                    <div class="shrink-0 w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center">
+                      <span class="text-xl font-bold text-slate-500">+{claim.verification_score}</span>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-slate-400">{claim.finding_summary}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+            
+            <!-- CTA Overlay -->
+            <div class="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
+              <div class="text-center">
+                <p class="text-slate-400 mb-4">Sign up to see all verified claims</p>
+                {user ? (
+                  <a 
+                    href="/claims" 
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm transition-colors"
+                  >
+                    View All Claims →
+                  </a>
+                ) : (
+                  <a 
+                    href="/signup" 
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm transition-colors"
+                  >
+                    Get Started Free →
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <!-- If no preview claims, just show CTA -->
+        {(!previewClaims || previewClaims.length === 0) && (
+          <div class="text-center pt-6 border-t border-slate-800">
+            {user ? (
+              <a 
+                href="/claims" 
+                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
+              >
+                View All Claims →
+              </a>
+            ) : (
+              <a 
+                href="/signup" 
+                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
+              >
+                Sign Up to See More →
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 px-6 border-t border-slate-800/50 text-center">
+      <p class="text-sm text-slate-600">
+        Built to fight misinformation, one claim at a time.
+      </p>
+    </footer>
   </div>
 </Layout>

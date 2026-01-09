@@ -1,6 +1,7 @@
 export interface Claim {
   claim_id: string;
   video_id: string;
+  video_title: string | null;
   timestamp: string;
   segment_text: string;
   author_mentioned: string | null;

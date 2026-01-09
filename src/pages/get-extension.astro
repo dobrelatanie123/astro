@@ -1,0 +1,116 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const { user } = Astro.locals;
+
+// Redirect to login if not authenticated
+if (!user) {
+  return Astro.redirect('/login?redirect=/get-extension');
+}
+---
+
+<Layout title="Get Extension | Lumos">
+  <div class="min-h-screen bg-slate-950 text-slate-100 py-12 px-4">
+    <div class="max-w-2xl mx-auto">
+      
+      <!-- Header -->
+      <div class="text-center mb-12">
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-violet-500/30">
+          <span class="text-4xl">🧩</span>
+        </div>
+        <h1 class="text-3xl font-bold mb-3">Get the Lumos Extension</h1>
+        <p class="text-slate-400">Install our browser extension to verify claims while watching YouTube.</p>
+      </div>
+
+      <!-- User Info -->
+      <div class="bg-slate-900/50 rounded-xl p-4 border border-slate-800 mb-8 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
+          <span class="text-violet-400">👤</span>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Logged in as</div>
+          <div class="text-slate-200">{user.email}</div>
+        </div>
+      </div>
+
+      <!-- Installation Steps -->
+      <div class="space-y-6">
+        
+        <!-- Step 1 -->
+        <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+          <div class="flex items-start gap-4">
+            <div class="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold shrink-0">
+              1
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-200 mb-2">Install the Extension</h3>
+              <p class="text-sm text-slate-400 mb-4">
+                Add Lumos to your Chrome browser from the Chrome Web Store.
+              </p>
+              <a 
+                href="#" 
+                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+              >
+                <img src="https://www.google.com/chrome/static/images/chrome-logo.svg" alt="Chrome" class="w-5 h-5" />
+                <span>Add to Chrome</span>
+                <span class="text-slate-500 text-sm">(Coming Soon)</span>
+              </a>
+              
+              <!-- Dev mode instructions -->
+              <details class="mt-4">
+                <summary class="text-sm text-violet-400 cursor-pointer hover:text-violet-300">
+                  Developer: Load unpacked extension
+                </summary>
+                <div class="mt-3 p-4 rounded-lg bg-slate-800/50 text-sm text-slate-400 space-y-2">
+                  <p>1. Open <code class="text-violet-300">chrome://extensions</code></p>
+                  <p>2. Enable "Developer mode" (top right)</p>
+                  <p>3. Click "Load unpacked"</p>
+                  <p>4. Select the <code class="text-violet-300">extension/</code> folder</p>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+          <div class="flex items-start gap-4">
+            <div class="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold shrink-0">
+              2
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-200 mb-2">Sign in to Extension</h3>
+              <p class="text-sm text-slate-400">
+                Click the Lumos extension icon and sign in with the same account you used here 
+                (<span class="text-violet-400">{user.email}</span>).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="bg-slate-900/50 rounded-xl p-6 border border-slate-800">
+          <div class="flex items-start gap-4">
+            <div class="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold shrink-0">
+              3
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-200 mb-2">Start Watching</h3>
+              <p class="text-sm text-slate-400">
+                Go to any YouTube video with scientific claims. Lumos will automatically extract and verify claims as you watch.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Back to Dashboard -->
+      <div class="text-center mt-8">
+        <a href="/claims" class="text-slate-400 hover:text-slate-200 transition-colors text-sm">
+          ← Back to Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+</Layout>
+
